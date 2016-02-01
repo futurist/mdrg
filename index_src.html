@@ -6,7 +6,7 @@
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
 <script type="text/javascript" src="http://1111hui.com/js/mithril.js?##random"></script>
-<script type="text/javascript" src="m_drag.js?##random"></script>
+<script type="text/javascript" src="m_drag_src.js?##random"></script>
 <style type="text/css">
 html,body{
 	height: 100%;
@@ -156,6 +156,14 @@ function getAngle(dom, pageX, pageY){
     var angle = Math.round(Math.atan2(center.y-pageY, pageX-center.x) * (180/Math.PI));
     return angle
 }
+var addClass = function(dom, className){
+    if( !(new RegExp('\\b'+className+'\\b')).test(dom.className) ){
+        dom.className+=className
+    }
+}
+var removeClass = function(dom, className){
+    dom.className= dom.className.split(new RegExp('\\b'+className+'\\b')).join(' ')
+}
 
 // drag for DOM demo, without mithril.js
 var initRotate = 164;
@@ -192,7 +200,6 @@ for(var i=con.length;i--;){
 
 // vdom part
 
-
 var news={
     left: ['NEWS 1', 'NEWS 2', 'NEWS 3', ],
     right: ['NEWS 4', 'NEWS 5', 'NEWS 6', ]
@@ -200,70 +207,41 @@ var news={
 var com = {
     controller:function(){
         var ctrl = this
-        var LI_WIDTH = 200
-        var LI_HEIGHT = 82
-        var dragClass = 'active'
-        var dragForVDom = m_drag({touch:false});  // set mithril.m function as option
-        ctrl.redrawCount = 0
+        ctrl.dragClass = 'active'
         ctrl.eventCache = {}
-        ctrl.addClass = function(dom, className){
-        	if( !(new RegExp('\\b'+className+'\\b')).test(dom.className) ){
-	            dom.className+=className
-	        }
+        ctrl.curPos = null
+        ctrl.curIdx = null
+        ctrl.swapCell = function(targetPos, targetIdx) {
+            var pos = ctrl.curPos
+            var idx = ctrl.curIdx
+            if(idx===null||pos===null) return;
+            var moveY = targetIdx-idx
+            var changePos = targetPos!=pos
+            if( changePos && idx>=0 && idx<news[pos].length ) {
+                var n = news[pos].splice(idx,1)
+                ctrl.curPos = targetPos
+                ctrl.curIdx = Math.max(0, Math.min(idx, news[targetPos].length))
+                news[targetPos].splice( ctrl.curIdx, 0, n.pop() )
+            }
+            if( !changePos && moveY!==0 && idx+moveY>=0 && idx+moveY<news[pos].length){
+                // swap 2 element of array
+                var t = news[pos][idx+moveY]
+                news[pos][idx+moveY] = news[pos][idx]
+                news[pos][idx] = t
+                ctrl.curIdx = idx+moveY
+            }
         }
-        ctrl.removeClass = function(dom, className){
-        	dom.className= dom.className.split(new RegExp('\\b'+className+'\\b')).join(' ')
+
+        var upFunc = function(evt){
+            var active = document.querySelector('.'+ctrl.dragClass)
+            ctrl.eventCache={}
+            if(active) removeClass( active , ctrl.dragClass)
+            ctrl.curPos = null
+            ctrl.curIdx = null
         }
-        ctrl.downHandler = function(pos, idx){
-            return dragForVDom(
-	            	'news'+pos+idx, 
-	            	{
-	            		onmousedown:function(e,data){
-	            			// prevent mithril redraw to allow mouse move
-	            			m.redraw.strategy('none')
-                            ctrl.addClass(data.target, dragClass)
-	            		}
-	            	}, 
-	            	// mouse move handler
-	            	function(evt, data, dragStore){
-
-		                var moveX = Math.round(-data.dx/LI_WIDTH)
-		                var moveY = Math.round(-data.dy/LI_HEIGHT)
-		                ctrl.addClass(data.target, dragClass)
-		                
-		                // below code to keep mousemove between mithril redraw
-		                evt.key = news[pos][idx]
-		                evt.oy = data.oy+moveY*LI_HEIGHT
-		                ctrl.eventCache = evt
-
-		                var opposite = pos=='right'?'left':'right'
-		                var changePos = pos=='left'&&moveX==1 || pos=='right'&&moveX==-1
-		                if( changePos && idx>=0 && idx<news[pos].length ) {
-		                	var n = news[pos].splice(idx,1)
-		                	// remember to delete registered dragHandler here
-		                	// since the element is not exists in dom according to news model
-		                	// Or, there may cause a MEMORY LEAK!!!!!!
-		                	delete dragStore['news'+pos+idx]
-
-		            		news[opposite].splice( Math.max(0, Math.min(idx+moveY, news[opposite].length)), 0, n.pop() )
-		                	m.redraw()
-		                }
-		                if( !changePos && moveY!==0 && idx+moveY>=0 && idx+moveY<news[pos].length){
-		                	// swap 2 element of array
-		                    var t = news[pos][idx+moveY]
-		                    news[pos][idx+moveY] = news[pos][idx]
-		                    news[pos][idx] = t
-		                    m.redraw()
-		                }
-
-		            },
-
-		            // mouse up handler
-		            function(evt, data, dragStore){
-		                ctrl.eventCache={}
-		                ctrl.removeClass(data.target, dragClass)
-		            }
-            )
+        document.addEventListener('mouseup', upFunc)
+        ctrl.onunload = function(e){
+            document.removeEventListener('mouseup', upFunc)
         }
     },
     view:function(ctrl){
@@ -271,20 +249,41 @@ var com = {
         m('h2', 'MITHRIL V-DOM DRAG DEMO'),
         m('.tip', JSON.stringify(news) ),
         m('.newsCon',
-	        Object.keys(news).map(function(key){
-	            return m('ul.'+key, {key:key}, news[key].map(function(text, idx){
-		                    return m('li', {key:news[key][idx], config:function(el,old,ctx){
-		                        ctx.retain=true
-		                        if(ctrl.eventCache.key===news[key][idx] ) el.onmousedown(ctrl.eventCache);
-		                    }, 
-		                    onmousedown: ctrl.downHandler(key,idx)
-		                }, text)
-		            }))
-	        })
+            Object.keys(news).map(function(key){
+                return m('ul.'+key, 
+                        {key:key, onmouseover:function(e){
+                            ctrl.swapCell(key, news[key].length)
+                        }}, 
+                        news[key].map(function(text, idx){
+                            return m('li', {
+                                key:news[key][idx], 
+                                config:function(el,old,ctx){
+                                    ctx.retain=true
+                                    if(ctrl.eventCache.key===news[key][idx] ) el.onmousedown(ctrl.eventCache);
+                                },
+                                onmousedown:function(evt){
+                                    // prevent mithril redraw to allow mouse move
+                                    m.redraw.strategy('none')
+                                    addClass(this, ctrl.dragClass)
+                                    evt.key = news[key][idx]
+                                    ctrl.eventCache = evt
+                                    ctrl.curPos = key
+                                    ctrl.curIdx = idx
+                                },
+                                onmouseover:function(evt){
+                                    evt.stopPropagation()
+                                    ctrl.swapCell(key, idx)
+                                },
+
+                        }, text)
+                    }))
+            })
         )
         ]
     }
 }
+
+
 m.mount( document.querySelector('#vdom'), com )
 
 </script>

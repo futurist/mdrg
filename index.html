@@ -156,6 +156,14 @@ function getAngle(dom, pageX, pageY){
     var angle = Math.round(Math.atan2(center.y-pageY, pageX-center.x) * (180/Math.PI));
     return angle
 }
+var addClass = function(dom, className){
+    if( !(new RegExp('\\b'+className+'\\b')).test(dom.className) ){
+        dom.className+=className
+    }
+}
+var removeClass = function(dom, className){
+    dom.className= dom.className.split(new RegExp('\\b'+className+'\\b')).join(' ')
+}
 
 // drag for DOM demo, without mithril.js
 var initRotate = 164;
@@ -192,7 +200,6 @@ for(var i=con.length;i--;){
 
 // vdom part
 
-
 var news={
     left: ['NEWS 1', 'NEWS 2', 'NEWS 3', ],
     right: ['NEWS 4', 'NEWS 5', 'NEWS 6', ]
@@ -201,19 +208,9 @@ var com = {
     controller:function(){
         var ctrl = this
         ctrl.dragClass = 'active'
-        ctrl.redrawCount = 0
         ctrl.eventCache = {}
         ctrl.curPos = null
         ctrl.curIdx = null
-        ctrl.addClass = function(dom, className){
-            if( !(new RegExp('\\b'+className+'\\b')).test(dom.className) ){
-                dom.className+=className
-            }
-        }
-        ctrl.removeClass = function(dom, className){
-            dom.className= dom.className.split(new RegExp('\\b'+className+'\\b')).join(' ')
-        }
-
         ctrl.swapCell = function(targetPos, targetIdx) {
             var pos = ctrl.curPos
             var idx = ctrl.curIdx
@@ -222,10 +219,6 @@ var com = {
             var changePos = targetPos!=pos
             if( changePos && idx>=0 && idx<news[pos].length ) {
                 var n = news[pos].splice(idx,1)
-                // remember to delete registered dragHandler here
-                // since the element is not exists in dom according to news model
-                // Or, there may cause a MEMORY LEAK!!!!!!
-                // delete dragStore['news'+pos+idx]
                 ctrl.curPos = targetPos
                 ctrl.curIdx = Math.max(0, Math.min(idx, news[targetPos].length))
                 news[targetPos].splice( ctrl.curIdx, 0, n.pop() )
@@ -242,7 +235,7 @@ var com = {
         var upFunc = function(evt){
             var active = document.querySelector('.'+ctrl.dragClass)
             ctrl.eventCache={}
-            if(active) ctrl.removeClass( active , ctrl.dragClass)
+            if(active) removeClass( active , ctrl.dragClass)
             ctrl.curPos = null
             ctrl.curIdx = null
         }
@@ -271,7 +264,7 @@ var com = {
                                 onmousedown:function(evt){
                                     // prevent mithril redraw to allow mouse move
                                     m.redraw.strategy('none')
-                                    ctrl.addClass(this, ctrl.dragClass)
+                                    addClass(this, ctrl.dragClass)
                                     evt.key = news[key][idx]
                                     ctrl.eventCache = evt
                                     ctrl.curPos = key
